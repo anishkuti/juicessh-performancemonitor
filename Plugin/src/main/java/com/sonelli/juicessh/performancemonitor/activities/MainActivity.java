@@ -2,10 +2,12 @@ package com.sonelli.juicessh.performancemonitor.activities;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -147,43 +149,6 @@ public class MainActivity extends ActionBarActivity implements ActionBar.OnNavig
             }
         });
 
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        if(loadAverageTextView != null){
-            loadAverageTextView.resizeText();
-        }
-
-        // Use a Loader to load the connection list into the adapter from the JuiceSSH content provider
-        // This keeps DB activity async and off the UI thread to prevent the plugin lagging
-        getSupportLoaderManager().initLoader(0, null, new ConnectionListLoader(this, spinnerAdapter));
-
-        if(this.isConnected){
-            connectButton.setVisibility(View.GONE);
-            disconnectButton.setVisibility(View.VISIBLE);
-        } else {
-            connectButton.setVisibility(View.VISIBLE);
-            disconnectButton.setVisibility(View.GONE);
-        }
-
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if(this.isConnected){
-            // Disconnect when activity is paused
-            disconnectButton.performClick();
-        }
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-
         client.start(this, new OnClientStartedListener() {
             @Override
             public void onClientStarted() {
@@ -202,10 +167,46 @@ public class MainActivity extends ActionBarActivity implements ActionBar.OnNavig
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-        if(isClientStarted){
+    protected void onResume() {
+        super.onResume();
+
+        if(loadAverageTextView != null){
+            loadAverageTextView.resizeText();
+        }
+
+        // Use a Loader to load the connection list into the adapter from the JuiceSSH content provider
+        // This keeps DB activity async and off the UI thread to prevent the plugin lagging
+
+        if(checkCallingOrSelfPermission("com.sonelli.juicessh.api.v1.permission.READ_CONNECTIONS") == PackageManager.PERMISSION_GRANTED) {
+            getSupportLoaderManager().initLoader(0, null, new ConnectionListLoader(this, spinnerAdapter));
+        }
+
+        if(this.isConnected){
+            connectButton.setVisibility(View.GONE);
+            disconnectButton.setVisibility(View.VISIBLE);
+        } else {
+            connectButton.setVisibility(View.VISIBLE);
+            disconnectButton.setVisibility(View.GONE);
+        }
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if(isClientStarted) {
+
+            if (isConnected){
+                try {
+                    client.disconnect(sessionId, sessionKey);
+                } catch (ServiceNotConnectedException e) {
+                    Log.e(TAG, "Failed to disconnect JuiceSSH session used performance monitor plugin");
+                }
+             }
+
             client.stop(this);
+
         }
     }
 
